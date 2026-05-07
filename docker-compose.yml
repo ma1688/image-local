@@ -1,13 +1,38 @@
 name: local-image
 
+x-backend-env: &backend-env
+  APP_DATA_DIR: ${APP_DATA_DIR:-/app/data}
+  TASK_BACKEND: ${TASK_BACKEND:-celery}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+  CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+  CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+  SECRET_FERNET_KEY: ${SECRET_FERNET_KEY:-}
+  ALLOW_ANY_DIR_SCAN: ${ALLOW_ANY_DIR_SCAN:-true}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5178}
+
+x-backend-common: &backend-common
+  image: local-image/backend:dev
+  restart: unless-stopped
+  init: true
+  environment:
+    <<: *backend-env
+  volumes:
+    - ./backend:/app
+  extra_hosts:
+    # 容器内访问宿主机服务时使用 http://host.docker.internal:<port>
+    - "host.docker.internal:host-gateway"
+  networks:
+    - app
+
 services:
   redis:
     image: redis:7-alpine
-    container_name: li-redis
     restart: unless-stopped
-    # 不向宿主机暴露端口；backend/worker 在 docker 内网通过 container name `redis` 访问
+    # 不向宿主机暴露端口；backend/worker 在 docker 内网通过服务名 `redis` 访问
     expose:
       - "6379"
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
     volumes:
       - redis-data:/data
     healthcheck:
@@ -15,70 +40,116 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+      start_period: 5s
+    networks:
+      - app
 
   backend:
+    <<: *backend-common
     build:
       context: ./backend
       dockerfile: Dockerfile
-    image: local-image/backend:dev
-    container_name: li-backend
+      target: dev
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
     depends_on:
       redis:
         condition: service_healthy
-    environment:
-      APP_DATA_DIR: /app/data
-      TASK_BACKEND: ${TASK_BACKEND:-celery}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
-      SECRET_FERNET_KEY: ${SECRET_FERNET_KEY:-}
-      ALLOW_ANY_DIR_SCAN: ${ALLOW_ANY_DIR_SCAN:-true}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
-      - "8787:8787"
-    volumes:
-      - ./backend:/app
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8787 --reload --reload-dir /app/app
+      - "127.0.0.1:${BACKEND_PORT:-8787}:8787"
+    command:
+      [
+        "uv",
+        "run",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8787",
+        "--reload",
+        "--reload-dir",
+        "/app/app",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/api/ready', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
   worker:
-    image: local-image/backend:dev
-    container_name: li-worker
+    <<: *backend-common
     depends_on:
       redis:
         condition: service_healthy
       backend:
-        condition: service_started
+        condition: service_healthy
     environment:
-      APP_DATA_DIR: /app/data
+      <<: *backend-env
       TASK_BACKEND: celery
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
-      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
-      SECRET_FERNET_KEY: ${SECRET_FERNET_KEY:-}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
-    volumes:
-      - ./backend:/app
-    command: uv run celery -A app.core.celery_app.celery_app worker -l INFO -P prefork -c 4
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "-A",
+        "app.core.celery_app.celery_app",
+        "worker",
+        "-l",
+        "${LOG_LEVEL:-INFO}",
+        "-P",
+        "prefork",
+        "-c",
+        "${CELERY_CONCURRENCY:-4}",
+      ]
+    stop_grace_period: 30s
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
+      args:
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-https://registry.npmjs.org/}
     image: local-image/frontend:dev
-    container_name: li-frontend
+    restart: unless-stopped
+    init: true
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     environment:
       VITE_API_BASE: ${VITE_API_BASE:-/api}
+      VITE_BACKEND_TARGET: ${VITE_BACKEND_TARGET:-http://backend:8787}
     ports:
-      - "5173:5173"
+      - "127.0.0.1:${FRONTEND_PORT:-5178}:5173"
     volumes:
       - ./frontend:/app
       - frontend-node-modules:/app/node_modules
-    command: pnpm dev --host 0.0.0.0 --port 5173
+    command: ["pnpm", "dev", "--host", "0.0.0.0", "--port", "5173"]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:5173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - app
 
 volumes:
   redis-data:
   frontend-node-modules:
+
+networks:
+  app:
+    driver: bridge
