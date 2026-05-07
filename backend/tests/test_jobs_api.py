@@ -112,7 +112,7 @@ async def test_create_job_invalid_path(client: AsyncClient, tmp_path: Path) -> N
             "api_profile_id": profile["id"],
             "model": "m",
             "size": "1024x1024",
-            "prompt": "",
+            "prompt": "x",  # ref_batch 含 {prompt} 占位符；非空才能走到 path 校验
             "candidates_per_image": 1,
             "auto_retry": False,
             "retry_max": 1,

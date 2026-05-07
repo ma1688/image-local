@@ -14,9 +14,11 @@ from app.api.health import router as health_router
 from app.api.images import router as images_router
 from app.api.jobs import router as jobs_router
 from app.api.sse import router as sse_router
+from app.api.storage import router as storage_router
 from app.api.templates import router as templates_router
 from app.core.db import upgrade_db_to_head
 from app.core.logging import configure_logging
+from app.core.request_log import RequestLogMiddleware
 from app.core.settings import get_settings
 
 
@@ -53,14 +55,22 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-Id"],
     )
+    # 结构化请求日志在最外层（先于业务），保证未捕获异常也会被记录
+    app.add_middleware(RequestLogMiddleware)
     app.include_router(health_router, prefix="/api")
+    # /api/ready 简化别名（与 /api/health/ready 等价）
+    from app.api.health import ready as _ready_endpoint
+
+    app.get("/api/ready", tags=["health"])(_ready_endpoint)
     app.include_router(templates_router, prefix="/api")
     app.include_router(api_profiles_router, prefix="/api")
     app.include_router(images_router, prefix="/api")
     app.include_router(files_router, prefix="/api")
     app.include_router(jobs_router, prefix="/api")
     app.include_router(sse_router, prefix="/api")
+    app.include_router(storage_router, prefix="/api")
     return app
 
 

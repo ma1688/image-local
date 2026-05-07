@@ -23,3 +23,5 @@ class TemplateRead(TemplateBase):
     id: int
     builtin: bool
     created_at: datetime
+    placeholders: list[str] = []
+    unknown_placeholders: list[str] = []

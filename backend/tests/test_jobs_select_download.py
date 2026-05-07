@@ -195,7 +195,7 @@ async def test_select_only_succeeded(
                 "api_profile_id": profile["id"],
                 "model": "m",
                 "size": "1024x1024",
-                "prompt": "",
+                "prompt": "x",
                 "candidates_per_image": 1,
                 "auto_retry": False,
                 "retry_max": 1,

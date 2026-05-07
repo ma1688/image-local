@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job, JobCandidate, JobItem
+from app.models.template import Template
 from app.schemas.job import JobCreate
 from app.services.event_bus import publish as publish_event
+from app.services.prompt_template import validate_prompt
 from app.services.storage import InvalidPathError, safe_resolve
 
 
@@ -31,6 +34,25 @@ class JobCreationError(ValueError):
 
 
 async def create_job(payload: JobCreate, session: AsyncSession) -> Job:
+    # 加载模板并对 prompt 占位符做校验：
+    # - 模板包含 {prompt} 但用户未填 -> 400 阻断
+    # - 模板包含未知占位符 (例如未来可能加 {seed}) -> 400 阻断，避免静默无效模板
+    tpl = (
+        await session.execute(
+            select(Template).where(Template.code == payload.template_code)
+        )
+    ).scalar_one_or_none()
+    template_text = str(tpl.prompt_template) if tpl is not None else ""
+    pv = validate_prompt(template_text, payload.prompt)
+    if pv.requires_user_prompt:
+        raise JobCreationError(
+            "模板包含 {prompt} 占位符但 prompt 为空；请在 prompt 输入用户描述"
+        )
+    if pv.unknown:
+        raise JobCreationError(
+            "模板包含未支持的占位符: " + ", ".join("{" + v + "}" for v in pv.unknown)
+        )
+
     valid_paths: list[Path] = []
     for raw in payload.source_paths:
         try:

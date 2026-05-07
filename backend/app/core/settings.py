@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     SOURCE_IMAGE_MAX_BYTES: int = 20 * 1024 * 1024
     DEFAULT_TASK_TIMEOUT_SECONDS: int = 1800
 
+    # 数据目录使用警戒阈值（字节）。仅做 UI 警告，不会自动清理。
+    # 默认 5 GiB。运维可在 .env 中按机器空间放大或缩小。
+    STORAGE_WARN_BYTES: int = 5 * 1024 * 1024 * 1024
+    # 数据目录硬上限（字节，默认 0 = 不限制）。设置后超过会让上传/创建任务报 4xx。
+    STORAGE_HARD_LIMIT_BYTES: int = 0
+
     @property
     def outputs_dir(self) -> Path:
         return self.APP_DATA_DIR / "outputs"
