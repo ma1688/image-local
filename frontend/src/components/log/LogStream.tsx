@@ -1,8 +1,14 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { Button, Card, Empty, Space, Tag, Tooltip, Typography } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button, Card, Space, Tag, Tooltip, Typography } from 'antd';
 import { ClearOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { subscribeJobEvents, type SseEntry, type SseEvent } from '@/api/sse';
+import {
+  subscribeJobEvents,
+  type SseConnectionState,
+  type SseEntry,
+  type SseEvent,
+} from '@/api/sse';
+import EmptyHint from '@/components/common/EmptyHint';
 import { useJobStore } from '@/store/jobStore';
 
 const { Text } = Typography;
@@ -45,15 +51,19 @@ export default function LogStream() {
   const resetEvents = useJobStore((s) => s.resetEvents);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const [sseState, setSseState] = useState<SseConnectionState>('closed');
 
   // 订阅 / 取消 SSE
   useEffect(() => {
     if (!currentJob) return;
-    const handle = subscribeJobEvents(currentJob.id, (entry: SseEntry) => {
-      // 过滤心跳
-      if (entry.payload.event === 'ping') return;
-      appendEvent(entry);
-    });
+    const handle = subscribeJobEvents(
+      currentJob.id,
+      (entry: SseEntry) => {
+        if (entry.payload.event === 'ping') return;
+        appendEvent(entry);
+      },
+      { onStateChange: setSseState },
+    );
     return () => handle.close();
   }, [currentJob, appendEvent]);
 
@@ -81,6 +91,13 @@ export default function LogStream() {
             {subtitle}
           </Text>
           {status && <Tag color={status === 'running' ? 'processing' : 'default'}>{status}</Tag>}
+          {currentJob && sseState !== 'open' && sseState !== 'closed' && (
+            <Tooltip title="网络抖动或后端重启时会自动重连，并按 Last-Event-ID 续推未消费事件">
+              <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                {sseState === 'connecting' ? '连接中…' : '重连中…'}
+              </Tag>
+            </Tooltip>
+          )}
         </Space>
       }
       extra={
@@ -107,22 +124,36 @@ export default function LogStream() {
         }}
       >
         {events.length === 0 ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
+          <div
+            style={{
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <EmptyHint
               description={
                 <Text style={{ color: '#94a3b8', fontSize: 12 }}>
-                  {currentJob ? '等待 worker 上报第一条事件…' : '提交任务后这里会实时显示生成进展'}
+                  {currentJob
+                    ? '等待 worker 上报第一条事件…'
+                    : '提交任务后这里会实时显示生成进展'}
                 </Text>
               }
             />
           </div>
         ) : (
-          events.map((e) => {
+          events.map((e, idx) => {
             const ts = dayjs(e.receivedAt).format('HH:mm:ss.SSS');
             const color = LEVEL_COLOR[e.payload.event] ?? 'default';
+            // 仅最近一条条目挂上高亮动画 className，其余按静态样式渲染。
+            // 配合 CSS 关键帧实现淡入 + 1s 内黄色高亮渐隐。
+            const isLatest = idx === events.length - 1;
             return (
-              <div key={e.id} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+              <div
+                key={e.id}
+                className={isLatest ? 'log-line log-line--new' : 'log-line'}
+              >
                 <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{ts}</span>
                 <Tag color={color} style={{ marginInlineEnd: 0, fontSize: 10, lineHeight: '16px' }}>
                   {e.payload.event}

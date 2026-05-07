@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { App, Button, Card, Col, InputNumber, Row, Space, Switch, Tag, Tooltip, Typography } from 'antd';
 import { PlayCircleOutlined, ClearOutlined, StopOutlined } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
+import { notifyError } from '@/api/messages';
 import type { JobCreate } from '@/api/types';
 import { useConfigStore } from '@/store/configStore';
 import { useImageSourceStore } from '@/store/imageSourceStore';
@@ -96,7 +96,7 @@ export default function GenerationControl() {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '提交失败');
+      notifyError(message, err);
     },
   });
 
@@ -118,11 +118,12 @@ export default function GenerationControl() {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '取消失败');
+      notifyError(message, err);
     },
   });
 
   const onStart = () => {
+    if (isRunning) return; // 已经在跑，不重复提交
     if (!selectedProfileId) return message.warning('请先选择 API 配置');
     if (!selectedModel) return message.warning('请先选择模型');
     if (selectedCount === 0) return message.warning('请先选择要处理的图片');
@@ -144,6 +145,40 @@ export default function GenerationControl() {
 
   const isRunning = currentJob && (currentJob.status === 'queued' || currentJob.status === 'running');
   const tagInfo = currentJob ? STATUS_TAG[currentJob.status] ?? { color: 'default', label: currentJob.status } : null;
+
+  // 快捷键：Ctrl/Cmd + Enter -> 开始生成；Esc -> 取消运行中任务。
+  // 用 ref 持有最新的 onStart / cancelMutation，避免每次 deps 变化都重新绑定 listener。
+  const onStartRef = useRef<() => void>(() => {});
+  const onCancelRef = useRef<() => void>(() => {});
+  onStartRef.current = onStart;
+  onCancelRef.current = () => {
+    if (isRunning && currentJob) cancelMutation.mutate(currentJob.id);
+  };
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // 在 input/textarea/contenteditable 内只处理 Ctrl/Cmd+Enter，
+      // 单独的 Enter 留给原生表单行为（避免误触发）。
+      const target = e.target as HTMLElement | null;
+      const inEditable =
+        !!target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable);
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        onStartRef.current();
+        return;
+      }
+      if (e.key === 'Escape' && !inEditable) {
+        e.preventDefault();
+        onCancelRef.current();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <Card
@@ -232,30 +267,34 @@ export default function GenerationControl() {
       <Row gutter={12} style={{ marginTop: 16 }}>
         <Col flex="auto">
           {isRunning ? (
-            <Button
-              danger
-              size="large"
-              block
-              icon={<StopOutlined />}
-              onClick={() => currentJob && cancelMutation.mutate(currentJob.id)}
-              loading={cancelMutation.isPending}
-            >
-              取消任务
-            </Button>
+            <Tooltip title="快捷键 Esc">
+              <Button
+                danger
+                size="large"
+                block
+                icon={<StopOutlined />}
+                onClick={() => currentJob && cancelMutation.mutate(currentJob.id)}
+                loading={cancelMutation.isPending}
+              >
+                取消任务
+              </Button>
+            </Tooltip>
           ) : (
-            <Button
-              type="primary"
-              size="large"
-              block
-              icon={<PlayCircleOutlined />}
-              onClick={onStart}
-              loading={submitMutation.isPending}
-              disabled={selectedCount === 0 || items.length === 0}
-            >
-              {selectedCount === 0
-                ? '开始生成'
-                : `开始生成（${selectedCount} 张 × ${candidatesPerImage} = ${totalCandidates} 候选）`}
-            </Button>
+            <Tooltip title="快捷键 Ctrl/Cmd + Enter">
+              <Button
+                type="primary"
+                size="large"
+                block
+                icon={<PlayCircleOutlined />}
+                onClick={onStart}
+                loading={submitMutation.isPending}
+                disabled={selectedCount === 0 || items.length === 0}
+              >
+                {selectedCount === 0
+                  ? '开始生成'
+                  : `开始生成（${selectedCount} 张 × ${candidatesPerImage} = ${totalCandidates} 候选）`}
+              </Button>
+            </Tooltip>
           )}
         </Col>
         <Col flex="80px">

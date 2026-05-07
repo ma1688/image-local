@@ -16,8 +16,16 @@ export interface SseEntry {
   payload: SseEvent;
 }
 
+export type SseConnectionState =
+  | 'connecting'
+  | 'open'
+  | 'reconnecting'
+  | 'closed';
+
 export interface SseHandle {
   close: () => void;
+  /** 当前连接状态（同步快照） */
+  getState: () => SseConnectionState;
 }
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api';
@@ -34,20 +42,45 @@ const KNOWN_EVENTS = [
   'error',
 ] as const;
 
+// 重连退避：1s / 2s / 4s / 8s / 15s 最大；连续失败 30 次后停止重连。
+const BACKOFF_SCHEDULE = [1000, 2000, 4000, 8000, 15000];
+const MAX_RETRY = 30;
+
+export interface SubscribeOptions {
+  /** 起始 last_id（首次连接时使用），默认 ``history`` 让后端回放历史事件 */
+  initialLastId?: string;
+  /** 连接状态变化回调，便于 UI 显示 reconnecting 提示 */
+  onStateChange?: (state: SseConnectionState) => void;
+}
+
 export function subscribeJobEvents(
   jobId: number,
   onEntry: (entry: SseEntry) => void,
-  opts?: { lastId?: string },
+  opts?: SubscribeOptions,
 ): SseHandle {
-  const lastId = opts?.lastId ?? 'history';
-  const url = `${API_BASE}/jobs/${jobId}/events?last_id=${encodeURIComponent(lastId)}`;
-  const es = new EventSource(url);
+  let lastSeenId = opts?.initialLastId ?? 'history';
+  let attempt = 0;
+  let closedByUser = false;
+  let es: EventSource | null = null;
+  let reconnectTimer: number | null = null;
+  let state: SseConnectionState = 'connecting';
+
+  const setState = (next: SseConnectionState) => {
+    state = next;
+    try {
+      opts?.onStateChange?.(next);
+    } catch {
+      // ignore consumer errors
+    }
+  };
 
   const handler = (kind: SseEvent['event']) => (e: MessageEvent<string>) => {
     try {
       const payload = JSON.parse(e.data) as Record<string, unknown>;
+      const id = e.lastEventId || `${Date.now()}`;
+      lastSeenId = id;
       onEntry({
-        id: e.lastEventId || `${Date.now()}`,
+        id,
         receivedAt: new Date().toISOString(),
         payload: { ...(payload as object), event: kind } as SseEvent,
       });
@@ -56,32 +89,84 @@ export function subscribeJobEvents(
     }
   };
 
-  for (const kind of KNOWN_EVENTS) {
-    es.addEventListener(kind, handler(kind) as (e: MessageEvent<string>) => void);
-  }
+  const connect = () => {
+    if (closedByUser) return;
+    setState(attempt === 0 ? 'connecting' : 'reconnecting');
+    const url = `${API_BASE}/jobs/${jobId}/events?last_id=${encodeURIComponent(lastSeenId)}`;
+    es = new EventSource(url);
 
-  // 默认 onmessage 兜底（无 event 字段）
-  es.onmessage = (e) => {
-    try {
-      const payload = JSON.parse(e.data) as Record<string, unknown>;
-      const kind = (payload as { event?: SseEvent['event'] }).event;
-      if (kind && (KNOWN_EVENTS as readonly string[]).includes(kind)) {
-        onEntry({
-          id: e.lastEventId || `${Date.now()}`,
-          receivedAt: new Date().toISOString(),
-          payload: payload as unknown as SseEvent,
-        });
-      }
-    } catch (err) {
-      console.warn('[sse] parse failed', err, e.data);
+    es.onopen = () => {
+      attempt = 0;
+      setState('open');
+    };
+
+    for (const kind of KNOWN_EVENTS) {
+      es.addEventListener(kind, handler(kind) as (e: MessageEvent<string>) => void);
     }
+
+    es.onmessage = (e) => {
+      try {
+        const payload = JSON.parse(e.data) as Record<string, unknown>;
+        const kind = (payload as { event?: SseEvent['event'] }).event;
+        if (kind && (KNOWN_EVENTS as readonly string[]).includes(kind)) {
+          const id = e.lastEventId || `${Date.now()}`;
+          lastSeenId = id;
+          onEntry({
+            id,
+            receivedAt: new Date().toISOString(),
+            payload: payload as unknown as SseEvent,
+          });
+        }
+      } catch (err) {
+        console.warn('[sse] parse failed', err, e.data);
+      }
+    };
+
+    es.onerror = () => {
+      // EventSource 默认会自动重连，但浏览器实现不一致：
+      // - Chrome 会持续 retry 但用空 last-event-id；
+      // - 服务端临时 5xx / 网络抖动后我们想用「最近 lastSeenId」续推，
+      //   所以这里直接关掉，自己控制 backoff 与 last_id。
+      const wasConnected = state === 'open';
+      try {
+        es?.close();
+      } catch {
+        // ignore close errors
+      }
+      es = null;
+      if (closedByUser) return;
+      if (attempt >= MAX_RETRY) {
+        console.warn('[sse] max retries reached, giving up');
+        setState('closed');
+        return;
+      }
+      const delay = BACKOFF_SCHEDULE[Math.min(attempt, BACKOFF_SCHEDULE.length - 1)];
+      attempt += 1;
+      setState('reconnecting');
+      if (wasConnected) {
+        console.warn('[sse] disconnected, will reconnect in', delay, 'ms');
+      }
+      reconnectTimer = window.setTimeout(connect, delay);
+    };
   };
 
-  es.onerror = (err) => {
-    console.warn('[sse] error', err);
-  };
+  connect();
 
   return {
-    close: () => es.close(),
+    close: () => {
+      closedByUser = true;
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      try {
+        es?.close();
+      } catch {
+        // ignore close errors
+      }
+      es = null;
+      setState('closed');
+    },
+    getState: () => state,
   };
 }

@@ -13,7 +13,9 @@ import type {
   JobListResponse,
   JobRead,
   ModelListResponse,
+  ReadyResponse,
   ScanResponse,
+  StorageUsage,
   Template,
   TemplateCreate,
   UploadResponse,
@@ -23,6 +25,10 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api'
 
 export const endpoints = {
   health: () => api.get<HealthResponse>('/health'),
+  ready: () => api.get<ReadyResponse>('/ready'),
+  storage: {
+    usage: () => api.get<StorageUsage>('/storage/usage'),
+  },
 
   templates: {
     list: () => api.get<Template[]>('/templates'),

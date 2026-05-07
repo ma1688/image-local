@@ -3,7 +3,6 @@ import {
   App,
   Button,
   Card,
-  Empty,
   Radio,
   Space,
   Spin,
@@ -18,9 +17,10 @@ import {
   StopOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
+import { notifyError } from '@/api/messages';
 import type { JobCandidateRead, JobItemRead } from '@/api/types';
+import EmptyHint from '@/components/common/EmptyHint';
 import { useJobStore } from '@/store/jobStore';
 
 const { Text } = Typography;
@@ -47,10 +47,14 @@ interface CandidateCardProps {
 function CandidateCard({ candidate, onSelect, pending }: CandidateCardProps) {
   const tag = STATUS_TAG[candidate.status] ?? { color: 'default', label: candidate.status };
   const canSelect = candidate.status === 'succeeded';
+  const isInflight =
+    candidate.status === 'queued' || candidate.status === 'running';
+  const thumbClass =
+    'result-candidate__thumb' + (isInflight ? ' shimmer' : '');
 
   return (
     <div className="result-candidate">
-      <div className="result-candidate__thumb">
+      <div className={thumbClass}>
         {candidate.status === 'succeeded' && candidate.output_path ? (
           <img src={thumbUrl(candidate.output_path)} alt={`候选 ${candidate.index}`} />
         ) : candidate.status === 'failed' ? (
@@ -179,7 +183,7 @@ export default function ResultsList() {
       }
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '设置失败');
+      notifyError(message, err);
       void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
     },
   });
@@ -187,15 +191,7 @@ export default function ResultsList() {
   if (!detail || detail.items.length === 0) {
     return (
       <Card size="small" className="workbench-card" title="生成结果">
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              尚无结果，点击「开始生成」后这里将按行显示候选图
-            </Text>
-          }
-          style={{ padding: '24px 0' }}
-        />
+        <EmptyHint title="尚无结果，点击「开始生成」后这里将按行显示候选图" />
       </Card>
     );
   }

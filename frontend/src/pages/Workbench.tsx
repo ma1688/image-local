@@ -12,6 +12,7 @@ import PromptEditor from '@/components/prompt/PromptEditor';
 import ResultsList from '@/components/results/ResultsList';
 import TemplateTabs from '@/components/template/TemplateTabs';
 import StatsHeader from '@/components/workbench/StatsHeader';
+import StorageBanner from '@/components/workbench/StorageBanner';
 import Toolbar from '@/components/workbench/Toolbar';
 
 const { Content } = Layout;
@@ -67,6 +68,7 @@ export default function Workbench() {
         </section>
 
         <Toolbar />
+        <StorageBanner />
 
         <div className="workbench-main-grid">
           <aside className="workbench-panel workbench-panel--source">

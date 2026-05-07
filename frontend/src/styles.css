@@ -585,6 +585,77 @@ button,
   color: inherit;
 }
 
+.log-line {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: transparent;
+  transition: background 600ms ease 600ms;
+}
+
+.log-line--new {
+  /* 新行：黄色高亮 600ms 后渐隐到透明（共 1.2s） */
+  animation: log-line-flash 1200ms ease-out 1;
+}
+
+@keyframes log-line-flash {
+  0% {
+    background: rgba(250, 204, 21, 0.32);
+  }
+  60% {
+    background: rgba(250, 204, 21, 0.16);
+  }
+  100% {
+    background: transparent;
+  }
+}
+
+/* 候选 thumb：running / queued 时的 shimmer 占位 */
+.result-candidate__thumb.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6),
+    rgba(241, 245, 249, 0.95),
+    rgba(226, 232, 240, 0.6)
+  );
+  background-size: 200% 100%;
+  animation: shimmer-slide 1400ms ease-in-out infinite;
+}
+
+@keyframes shimmer-slide {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* 存储警告条 */
+.storage-warn-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 0 0 8px 0;
+}
+.storage-warn-banner--warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+.storage-warn-banner--critical {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  color: #991b1b;
+}
+
 .result-list {
   display: flex;
   min-width: 0;

@@ -8,6 +8,10 @@ export interface Template {
   default_size: string | null;
   builtin: boolean;
   created_at: string;
+  /** 模板中出现的所有 {var} 变量（去重，保留首次顺序） */
+  placeholders: string[];
+  /** 后端目前支持的变量子集之外的变量；UI 上需以 warning 形式提示 */
+  unknown_placeholders: string[];
 }
 
 export interface TemplateCreate {
@@ -172,4 +176,37 @@ export interface JobListQuery {
   created_before?: string;
   limit?: number;
   offset?: number;
+}
+
+// ===== Storage / Readiness =====
+export type StorageStatus = 'ok' | 'warn' | 'critical';
+
+export interface StorageBucket {
+  name: string;
+  path: string;
+  bytes: number;
+  files: number;
+}
+
+export interface StorageUsage {
+  data_dir: string;
+  total_bytes: number;
+  buckets: StorageBucket[];
+  disk_total_bytes: number;
+  disk_free_bytes: number;
+  warn_bytes: number;
+  hard_limit_bytes: number;
+  status: StorageStatus;
+}
+
+export interface ReadyCheck {
+  ok: boolean;
+  detail: string | null;
+}
+
+export interface ReadyResponse {
+  ready: boolean;
+  db: ReadyCheck;
+  redis: ReadyCheck;
+  fernet: ReadyCheck;
 }

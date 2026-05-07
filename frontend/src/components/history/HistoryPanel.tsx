@@ -4,7 +4,6 @@ import {
   Button,
   Card,
   DatePicker,
-  Empty,
   Pagination,
   Popconfirm,
   Space,
@@ -21,9 +20,10 @@ import {
 } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError } from '@/api/client';
 import { endpoints } from '@/api/endpoints';
+import { notifyError } from '@/api/messages';
 import type { JobRead, Template } from '@/api/types';
+import EmptyHint from '@/components/common/EmptyHint';
 import { useConfigStore } from '@/store/configStore';
 import { useJobStore } from '@/store/jobStore';
 import { useWorkbenchStore } from '@/store/workbenchStore';
@@ -208,7 +208,7 @@ export default function HistoryPanel() {
       message.success(`已重新打开任务 #${detail.id}`);
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '打开失败');
+      notifyError(message, err);
     },
   });
 
@@ -221,7 +221,7 @@ export default function HistoryPanel() {
       void queryClient.invalidateQueries({ queryKey: ['job-detail', job.id] });
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '重试失败');
+      notifyError(message, err);
     },
   });
 
@@ -236,7 +236,7 @@ export default function HistoryPanel() {
       void queryClient.invalidateQueries({ queryKey: ['jobs'] });
     },
     onError: (err) => {
-      message.error(err instanceof ApiError ? err.detail : '删除失败');
+      notifyError(message, err);
     },
   });
 
@@ -292,15 +292,7 @@ export default function HistoryPanel() {
       />
 
       {items.length === 0 ? (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {listQuery.isLoading ? '加载中…' : '暂无历史任务'}
-            </Text>
-          }
-          style={{ padding: '24px 0' }}
-        />
+        <EmptyHint title={listQuery.isLoading ? '加载中…' : '暂无历史任务'} />
       ) : (
         <div className="history-list">
           {items.map((job) => {
