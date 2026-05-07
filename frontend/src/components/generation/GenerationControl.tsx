@@ -8,6 +8,7 @@ import type { JobCreate } from '@/api/types';
 import { useConfigStore } from '@/store/configStore';
 import { useImageSourceStore } from '@/store/imageSourceStore';
 import { useJobStore } from '@/store/jobStore';
+import { TERMINAL_JOB_STATUSES, shouldApplyPolledDetail } from '@/store/jobStateHelpers';
 import { useWorkbenchStore } from '@/store/workbenchStore';
 
 const { Text } = Typography;
@@ -49,11 +50,13 @@ export default function GenerationControl() {
   const selectedCount = selected.size;
   const totalCandidates = selectedCount * candidatesPerImage;
 
-  // 提交后轮询 job 详情
+  // 提交后轮询 job 详情。
+  // enabled 排除所有终态（succeeded/failed/cancelled）：终态后由 SSE 写入的
+  // detail 是权威，不再额外发 polling 请求，避免 stale 数据回写覆盖。
   const detailQuery = useQuery({
     queryKey: ['job-detail', currentJob?.id],
     queryFn: () => endpoints.jobs.get(currentJob!.id),
-    enabled: !!currentJob && currentJob.status !== 'succeeded' && currentJob.status !== 'cancelled',
+    enabled: !!currentJob && !TERMINAL_JOB_STATUSES.has(currentJob.status),
     refetchInterval: (q) => {
       const data = q.state.data;
       if (!data) return 1500;
@@ -62,30 +65,32 @@ export default function GenerationControl() {
   });
 
   useEffect(() => {
-    if (detailQuery.data) {
-      setCurrentDetail(detailQuery.data);
-      // 同步顶层 currentJob.status
-      const next = detailQuery.data;
-      setCurrentJob({
-        id: next.id,
-        template_code: next.template_code,
-        api_profile_id: next.api_profile_id,
-        model: next.model,
-        size: next.size,
-        prompt: next.prompt,
-        candidates_per_image: next.candidates_per_image,
-        auto_retry: next.auto_retry,
-        retry_max: next.retry_max,
-        output_dir: next.output_dir,
-        status: next.status,
-        total_candidates: next.total_candidates,
-        succeeded_count: next.succeeded_count,
-        failed_count: next.failed_count,
-        last_error: next.last_error,
-        created_at: next.created_at,
-        updated_at: next.updated_at,
-      });
-    }
+    if (!detailQuery.data) return;
+    const next = detailQuery.data;
+    // 双保险：即便 enabled 切到 false 之前还有 in-flight refetch，
+    // 这里也要丢弃显著 stale 的 polling 结果（store 已是终态而拉到的还在跑）。
+    const cur = useJobStore.getState().currentJob;
+    if (!shouldApplyPolledDetail(cur?.status, next.status)) return;
+    setCurrentDetail(next);
+    setCurrentJob({
+      id: next.id,
+      template_code: next.template_code,
+      api_profile_id: next.api_profile_id,
+      model: next.model,
+      size: next.size,
+      prompt: next.prompt,
+      candidates_per_image: next.candidates_per_image,
+      auto_retry: next.auto_retry,
+      retry_max: next.retry_max,
+      output_dir: next.output_dir,
+      status: next.status,
+      total_candidates: next.total_candidates,
+      succeeded_count: next.succeeded_count,
+      failed_count: next.failed_count,
+      last_error: next.last_error,
+      created_at: next.created_at,
+      updated_at: next.updated_at,
+    });
   }, [detailQuery.data, setCurrentDetail, setCurrentJob]);
 
   const submitMutation = useMutation({

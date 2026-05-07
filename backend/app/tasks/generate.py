@@ -140,14 +140,26 @@ def _aggregate_job_status(session: Session, job_id: int) -> None:
     if not job:
         return
     session.refresh(job)
+    status = str(job.status)
     _emit(
         job_id,
         "job.updated",
-        status=str(job.status),
+        status=status,
         succeeded=int(job.succeeded_count),
         failed=int(job.failed_count),
         total=int(job.total_candidates),
     )
+    # job 进入终态时再发一个独立事件，前端据此可主动 close SSE 订阅，
+    # 避免浏览器 EventSource 在终态后仍持有长连接（看似「连接中…」）。
+    if status in ("succeeded", "failed", "cancelled"):
+        _emit(
+            job_id,
+            "job.terminated",
+            status=status,
+            succeeded=int(job.succeeded_count),
+            failed=int(job.failed_count),
+            total=int(job.total_candidates),
+        )
 
 
 @celery_app.task(

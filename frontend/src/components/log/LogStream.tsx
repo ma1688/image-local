@@ -54,10 +54,21 @@ export default function LogStream() {
   const [sseState, setSseState] = useState<SseConnectionState>('closed');
 
   // 订阅 / 取消 SSE
+  //
+  // 依赖项里加上 currentJob.status 是为了 retry 场景：
+  // 1. job 进入终态时后端会发 job.terminated，sse.ts 收到后内部 close 订阅；
+  //    此时 sseState 已是 'closed'，但订阅 handle 仍未释放。
+  // 2. 用户点击 retry，HistoryPanel 在 mutation onSuccess 中调用
+  //    setCurrentJob(newJob)，新 job.status 从 failed/cancelled 变为 running；
+  //    依赖 status 后本 useEffect 重新执行 → cleanup 旧 handle → 重新订阅。
+  // 3. 仅依赖 currentJob 整个对象会让任何字段变化（例如 succeeded_count 推进）
+  //    都触发重订阅，过于浪费；只关注 id + status 两个真正影响订阅生命周期的字段。
+  const jobId = currentJob?.id ?? null;
+  const jobStatus = currentJob?.status ?? null;
   useEffect(() => {
-    if (!currentJob) return;
+    if (jobId == null) return;
     const handle = subscribeJobEvents(
-      currentJob.id,
+      jobId,
       (entry: SseEntry) => {
         if (entry.payload.event === 'ping') return;
         appendEvent(entry);
@@ -65,7 +76,7 @@ export default function LogStream() {
       { onStateChange: setSseState },
     );
     return () => handle.close();
-  }, [currentJob, appendEvent]);
+  }, [jobId, jobStatus, appendEvent]);
 
   // 自动滚动到底
   useEffect(() => {

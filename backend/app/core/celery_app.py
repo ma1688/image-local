@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from celery import Celery
+from celery.signals import worker_init, worker_process_init
 
 from .settings import get_settings
 
@@ -27,6 +30,25 @@ celery_app.conf.update(
     task_track_started=True,
     broker_connection_retry_on_startup=True,
 )
+
+
+def _setup_worker_logging(**_kwargs: Any) -> None:
+    """worker 进程启动时调一次 ``configure_logging``。
+
+    保证 task 代码里 ``loguru.logger.info(...)`` 在 worker 中也走带
+    ``enqueue=True`` 的 sink，避免 ``-P threads`` 下多线程并发记录因 sink
+    锁竞争互相阻塞。同时让 stdlib bridge 的 ``_InterceptHandler`` 在 worker
+    主进程上注册（celery 自身的 ``hijack_root_logger`` 行为不变，仅追加我
+    们的 handler 到 root logger）。
+    """
+    from app.core.logging import configure_logging
+
+    configure_logging()
+
+
+worker_init.connect(_setup_worker_logging)
+worker_process_init.connect(_setup_worker_logging)
+
 
 # M4 阶段会取消下面这行的注释以注册 worker tasks
 # celery_app.autodiscover_tasks(["app.workers"])

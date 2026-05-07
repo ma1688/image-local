@@ -2,6 +2,7 @@
 export type SseEvent =
   | { event: 'job.created'; job_id: number; total: number; candidates_per_image: number; items: { path: string; name: string }[] }
   | { event: 'job.updated'; job_id: number; status: string; succeeded: number; failed: number; total: number }
+  | { event: 'job.terminated'; job_id: number; status: string; succeeded: number; failed: number; total: number }
   | { event: 'candidate.running'; candidate_id: number; item_id: number; index: number; attempt: number; source_name: string }
   | { event: 'candidate.retry'; candidate_id: number; item_id: number; index: number; attempt: number; error: string; source_name: string }
   | { event: 'candidate.succeeded'; candidate_id: number; item_id: number; index: number; output_path: string; source_name: string }
@@ -33,6 +34,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? '/api'
 const KNOWN_EVENTS = [
   'job.created',
   'job.updated',
+  'job.terminated',
   'candidate.running',
   'candidate.retry',
   'candidate.succeeded',
@@ -74,12 +76,40 @@ export function subscribeJobEvents(
     }
   };
 
+  const closeInternal = () => {
+    closedByUser = true;
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    try {
+      es?.close();
+    } catch {
+      // ignore close errors
+    }
+    es = null;
+    setState('closed');
+  };
+
+  const dispatchEntry = (entry: SseEntry) => {
+    // 已经 close 之后，原生 EventSource 不会再触发事件；这里防御 close 与
+    // handler 触发之间的竞态、以及测试替身可能保留 listeners 的情况。
+    if (closedByUser) return;
+    // job.terminated 是后端在 job 终态时主动下发的「控制信号」，
+    // 用于让前端结束订阅；不向上层 onEntry 透传，避免污染日志展示。
+    if (entry.payload.event === 'job.terminated') {
+      closeInternal();
+      return;
+    }
+    onEntry(entry);
+  };
+
   const handler = (kind: SseEvent['event']) => (e: MessageEvent<string>) => {
     try {
       const payload = JSON.parse(e.data) as Record<string, unknown>;
       const id = e.lastEventId || `${Date.now()}`;
       lastSeenId = id;
-      onEntry({
+      dispatchEntry({
         id,
         receivedAt: new Date().toISOString(),
         payload: { ...(payload as object), event: kind } as SseEvent,
@@ -111,7 +141,7 @@ export function subscribeJobEvents(
         if (kind && (KNOWN_EVENTS as readonly string[]).includes(kind)) {
           const id = e.lastEventId || `${Date.now()}`;
           lastSeenId = id;
-          onEntry({
+          dispatchEntry({
             id,
             receivedAt: new Date().toISOString(),
             payload: payload as unknown as SseEvent,
@@ -153,20 +183,7 @@ export function subscribeJobEvents(
   connect();
 
   return {
-    close: () => {
-      closedByUser = true;
-      if (reconnectTimer !== null) {
-        window.clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      try {
-        es?.close();
-      } catch {
-        // ignore close errors
-      }
-      es = null;
-      setState('closed');
-    },
+    close: closeInternal,
     getState: () => state,
   };
 }

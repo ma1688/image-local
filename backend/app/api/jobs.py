@@ -178,6 +178,24 @@ async def cancel_job(
     except Exception as exc:
         logger.warning("publish job.updated on cancel failed: {}", exc)
 
+    # cancel 立刻把 job.status 置为终态 cancelled，再发一条 job.terminated 给
+    # SSE 订阅方：worker 仍可能后续完成 running 候选并再次 aggregate（也会重发
+    # job.terminated），重复发送对前端无副作用——前端只 close 一次连接。
+    try:
+        publish_event(
+            job_id,
+            {
+                "event": "job.terminated",
+                "job_id": job_id,
+                "status": str(job.status),
+                "succeeded": int(job.succeeded_count),
+                "failed": int(job.failed_count),
+                "total": int(job.total_candidates),
+            },
+        )
+    except Exception as exc:
+        logger.warning("publish job.terminated on cancel failed: {}", exc)
+
     return _job_to_read(job)
 
 
