@@ -1,0 +1,76 @@
+[project]
+name = "local-image-backend"
+version = "0.1.0"
+description = "Local batch image generation workbench - backend"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115.5",
+    "uvicorn[standard]>=0.32.1",
+    "pydantic>=2.10.2",
+    "pydantic-settings>=2.6.1",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20.0",
+    "alembic>=1.14.0",
+    "celery>=5.4.0",
+    "redis>=5.2.0",
+    "httpx>=0.28.0",
+    "pillow>=11.0.0",
+    "aiofiles>=24.1.0",
+    "sse-starlette>=2.1.3",
+    "loguru>=0.7.2",
+    "python-multipart>=0.0.20",
+    "cryptography>=43.0.3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-asyncio>=0.24.0",
+    "fakeredis>=2.26.1",
+    "ruff>=0.8.4",
+    "mypy>=1.13.0",
+    "types-aiofiles>=24.1.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "RUF"]
+ignore = [
+    "E501",
+    "RUF001",  # 中文全角标点歧义提示在中文项目中是误报
+    "RUF002",
+    "RUF003",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的 Depends/Query/Path/Body/File/Form 必须作为参数默认值使用
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.Header",
+    "fastapi.Cookie",
+    "fastapi.Form",
+    "fastapi.File",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = false
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

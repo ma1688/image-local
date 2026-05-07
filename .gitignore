@@ -1,0 +1,61 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+htmlcov/
+
+# uv
+.uv/
+
+# ===== Node =====
+node_modules/
+.pnp.*
+.pnpm-store/
+.npm/
+.yarn/
+dist/
+.vite/
+
+# ===== App data =====
+backend/data/outputs/
+backend/data/thumbs/
+backend/data/uploads/
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
+backend/data/*.log
+# 加密密钥：永远不提交
+backend/data/.fernet_key
+.fernet_key
+
+# 临时调试目录（开发期产物）
+backend/_tmp_*/
+backend/data/local_image.db
+
+# ===== Env =====
+.env
+.env.local
+backend/.env
+frontend/.env
+
+# ===== IDE =====
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ===== Docker =====
+*.pid

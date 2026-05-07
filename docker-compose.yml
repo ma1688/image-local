@@ -1,0 +1,84 @@
+name: local-image
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: li-redis
+    restart: unless-stopped
+    # 不向宿主机暴露端口；backend/worker 在 docker 内网通过 container name `redis` 访问
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: local-image/backend:dev
+    container_name: li-backend
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      APP_DATA_DIR: /app/data
+      TASK_BACKEND: ${TASK_BACKEND:-celery}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      SECRET_FERNET_KEY: ${SECRET_FERNET_KEY:-}
+      ALLOW_ANY_DIR_SCAN: ${ALLOW_ANY_DIR_SCAN:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./backend:/app
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8787 --reload --reload-dir /app/app
+
+  worker:
+    image: local-image/backend:dev
+    container_name: li-worker
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      APP_DATA_DIR: /app/data
+      TASK_BACKEND: celery
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+      SECRET_FERNET_KEY: ${SECRET_FERNET_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./backend:/app
+    command: uv run celery -A app.core.celery_app.celery_app worker -l INFO -P prefork -c 4
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: local-image/frontend:dev
+    container_name: li-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      VITE_API_BASE: ${VITE_API_BASE:-/api}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+    command: pnpm dev --host 0.0.0.0 --port 5173
+
+volumes:
+  redis-data:
+  frontend-node-modules:
