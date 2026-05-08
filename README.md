@@ -18,18 +18,18 @@
 
 ```mermaid
 flowchart LR
-  Browser[浏览器\nReact 19 + Vite + Ant Design] -->|REST /api| API[FastAPI Backend\nUvicorn :8787]
-  Browser <-->|SSE /api/jobs/{id}/events| API
+  Browser["浏览器<br/>React 19 + Vite + Ant Design"] -->|REST /api| API["FastAPI Backend<br/>Uvicorn :8787"]
+  API -->|SSE /api/jobs/:job_id/events| Browser
 
-  API -->|SQLite async| DB[(SQLite\nbackend/data/app.db)]
-  API -->|publish / read| RS[(Redis Streams\nli:job:{id}:events)]
-  API -->|enqueue| Broker[(Redis\nCelery broker/result)]
+  API -->|SQLite async| DB[("SQLite<br/>backend/data/app.db")]
+  API -->|publish / read| RS[("Redis Streams<br/>li:job:job_id:events")]
+  API -->|enqueue| Broker[("Redis<br/>Celery broker/result")]
 
-  Worker[Celery Worker\ngenerate_one_candidate] -->|consume| Broker
+  Worker["Celery Worker<br/>generate_one_candidate"] -->|consume| Broker
   Worker -->|sync SQLAlchemy| DB
   Worker -->|publish events| RS
-  Worker -->|write files| FS[(backend/data\nuploads / thumbs / outputs)]
-  Worker -->|HTTPX| Provider[OpenAI-compatible image API\n/v1/images/edits 或 /generations]
+  Worker -->|write files| FS[("backend/data<br/>uploads / thumbs / outputs")]
+  Worker -->|HTTPX| Provider["OpenAI-compatible image API<br/>/v1/images/edits 或 /generations"]
 
   API -->|serve files| FS
 ```
@@ -49,7 +49,7 @@ sequenceDiagram
   A->>D: 创建 job/items/candidates
   A->>R: 清理同 job_id 旧 Stream 并发布 job.created
   A->>R: 派发 candidate task
-  U->>A: GET /api/jobs/{id}/events (SSE)
+  U->>A: GET /api/jobs/:job_id/events (SSE)
   W->>R: 消费 task
   W->>D: candidate.running / attempts +1
   W->>R: publish candidate.running
