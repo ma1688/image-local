@@ -80,6 +80,10 @@ def _resolve_output_dir(job: Job) -> Path:
     s = get_settings()
     base = Path(job.output_dir)
     if not base.is_absolute():
+        # 兼容早期前端默认值 "data/outputs"。在宿主机本地开发时 APP_DATA_DIR
+        # 已经是 backend/data，若直接拼接会变成 backend/data/data/outputs。
+        if base.as_posix().replace("\\", "/") == "data/outputs":
+            base = Path("outputs")
         base = (s.APP_DATA_DIR / base).resolve()
     return base / str(job.id)
 

@@ -24,6 +24,8 @@ const STATUS_TAG: Record<string, { color: string; label: string }> = {
 export default function GenerationControl() {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
+  const submittingRef = useRef(false);
+  const cancellingRef = useRef<number | null>(null);
 
   const {
     candidatesPerImage,
@@ -103,6 +105,9 @@ export default function GenerationControl() {
     onError: (err) => {
       notifyError(message, err);
     },
+    onSettled: () => {
+      submittingRef.current = false;
+    },
   });
 
   const cancelMutation = useMutation({
@@ -125,10 +130,13 @@ export default function GenerationControl() {
     onError: (err) => {
       notifyError(message, err);
     },
+    onSettled: () => {
+      cancellingRef.current = null;
+    },
   });
 
   const onStart = () => {
-    if (isRunning) return; // 已经在跑，不重复提交
+    if (isRunning || submitMutation.isPending || submittingRef.current) return; // 已经在跑或正在提交，不重复提交
     if (!selectedProfileId) return message.warning('请先选择 API 配置');
     if (!selectedModel) return message.warning('请先选择模型');
     if (selectedCount === 0) return message.warning('请先选择要处理的图片');
@@ -145,6 +153,7 @@ export default function GenerationControl() {
       output_dir: outputDir,
       source_paths: items.filter((i) => i.valid && selected.has(i.path)).map((i) => i.path),
     };
+    submittingRef.current = true;
     submitMutation.mutate(payload);
   };
 
@@ -157,7 +166,10 @@ export default function GenerationControl() {
   const onCancelRef = useRef<() => void>(() => {});
   onStartRef.current = onStart;
   onCancelRef.current = () => {
-    if (isRunning && currentJob) cancelMutation.mutate(currentJob.id);
+    if (!isRunning || !currentJob) return;
+    if (cancellingRef.current === currentJob.id) return;
+    cancellingRef.current = currentJob.id;
+    cancelMutation.mutate(currentJob.id);
   };
 
   useEffect(() => {
@@ -278,7 +290,7 @@ export default function GenerationControl() {
                 size="large"
                 block
                 icon={<StopOutlined />}
-                onClick={() => currentJob && cancelMutation.mutate(currentJob.id)}
+                onClick={() => onCancelRef.current()}
                 loading={cancelMutation.isPending}
               >
                 取消任务
@@ -293,7 +305,7 @@ export default function GenerationControl() {
                 icon={<PlayCircleOutlined />}
                 onClick={onStart}
                 loading={submitMutation.isPending}
-                disabled={selectedCount === 0 || items.length === 0}
+                disabled={selectedCount === 0 || items.length === 0 || submitMutation.isPending}
               >
                 {selectedCount === 0
                   ? '开始生成'

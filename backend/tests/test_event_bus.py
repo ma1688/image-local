@@ -43,6 +43,20 @@ def test_publish_and_history(patch_redis: tuple[Any, Any]) -> None:
     assert out[0][1]["job_id"] == 42
 
 
+def test_reset_stream_clears_old_history(patch_redis: tuple[Any, Any]) -> None:
+    from app.services import event_bus as eb
+
+    eb.publish(42, {"event": "job.terminated", "job_id": 42, "status": "failed"})
+    eb.reset_stream(42)
+    eb.publish(42, {"event": "job.created", "job_id": 42, "total": 1})
+
+    import asyncio
+
+    out = asyncio.run(eb.history(42, count=10))
+    assert len(out) == 1
+    assert out[0][1]["event"] == "job.created"
+
+
 def test_read_stream_returns_new_only(patch_redis: tuple[Any, Any]) -> None:
     """传 last_id='$' 应该只看到新事件。"""
     from app.services import event_bus as eb

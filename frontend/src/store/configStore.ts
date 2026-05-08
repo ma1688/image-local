@@ -24,7 +24,7 @@ export const useConfigStore = create<ConfigState>()(
       selectedProfileId: null,
       selectedModel: null,
       selectedSize: '1024x1024',
-      outputDir: 'data/outputs',
+      outputDir: 'outputs',
       candidatesPerImage: 3,
       retryMax: 1,
       autoRetry: true,

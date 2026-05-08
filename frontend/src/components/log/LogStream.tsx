@@ -10,6 +10,7 @@ import {
 } from '@/api/sse';
 import EmptyHint from '@/components/common/EmptyHint';
 import { useJobStore } from '@/store/jobStore';
+import { isTerminalStatus } from '@/store/jobStateHelpers';
 
 const { Text } = Typography;
 
@@ -67,6 +68,10 @@ export default function LogStream() {
   const jobStatus = currentJob?.status ?? null;
   useEffect(() => {
     if (jobId == null) return;
+    if (isTerminalStatus(jobStatus)) {
+      setSseState('closed');
+      return;
+    }
     const handle = subscribeJobEvents(
       jobId,
       (entry: SseEntry) => {

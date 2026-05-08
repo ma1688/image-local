@@ -31,6 +31,7 @@ def test_generate_one_b64_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
     from app.services import openai_image as svc
 
     payload = {"data": [{"b64_json": _b64_image_bytes()}]}
+    captured: dict[str, str] = {}
 
     class _MockResponse:
         status_code = 200
@@ -52,7 +53,8 @@ def test_generate_one_b64_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
         def __exit__(self, *_: Any) -> None:
             return None
 
-        def post(self, *_: Any, **__: Any) -> _MockResponse:
+        def post(self, url: str, *_: Any, **__: Any) -> _MockResponse:
+            captured["url"] = url
             return _MockResponse()
 
         def get(self, *_: Any, **__: Any) -> _MockResponse:
@@ -70,6 +72,7 @@ def test_generate_one_b64_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
     )
     result = svc.generate_one(req)
     assert result.image_bytes == b"\x89PNG_FAKE_BYTES"
+    assert captured["url"] == "http://example.test/v1/images/edits"
 
 
 def test_generate_one_url_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -77,6 +80,7 @@ def test_generate_one_url_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
     from app.services import openai_image as svc
 
     image_bytes = b"\x89PNG_FROM_URL"
+    captured: dict[str, str] = {}
 
     class _Resp:
         def __init__(self, status: int, j: Any | None = None, body: bytes | str = "") -> None:
@@ -102,7 +106,8 @@ def test_generate_one_url_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
         def __exit__(self, *_: Any) -> None:
             return None
 
-        def post(self, *_: Any, **__: Any) -> _Resp:
+        def post(self, url: str, *_: Any, **__: Any) -> _Resp:
+            captured["url"] = url
             return _Resp(
                 200,
                 j={"data": [{"url": "http://img/x.png"}]},
@@ -123,6 +128,7 @@ def test_generate_one_url_path(src: Path, monkeypatch: pytest.MonkeyPatch) -> No
     )
     result = svc.generate_one(req)
     assert result.image_bytes == image_bytes
+    assert captured["url"] == "http://example.test/v1/images/generations"
 
 
 def test_generate_one_connect_error(src: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -195,3 +201,48 @@ def test_generate_one_4xx_non_retryable(src: Path, monkeypatch: pytest.MonkeyPat
     with pytest.raises(svc.GenerationError) as ei:
         svc.generate_one(req)
     assert ei.value.retryable is False
+
+
+def test_generate_one_provider_model_not_found_503_non_retryable(
+    src: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """部分兼容网关会把模型/渠道不可用包装成 503，但该类配置错误不应重试。"""
+    from app.services import openai_image as svc
+
+    class _Resp:
+        status_code = 503
+        text = (
+            '{"error":{"code":"model_not_found",'
+            '"message":"No available channel for model dall-e"}}'
+        )
+
+        def json(self) -> Any:
+            return {"error": {"code": "model_not_found"}}
+
+    class _Cli:
+        def __init__(self, *_: Any, **__: Any) -> None:
+            pass
+
+        def __enter__(self) -> _Cli:
+            return self
+
+        def __exit__(self, *_: Any) -> None:
+            return None
+
+        def post(self, *_: Any, **__: Any) -> _Resp:
+            return _Resp()
+
+    monkeypatch.setattr(svc.httpx, "Client", _Cli)
+
+    req = svc.GenerationRequest(
+        base_url="http://x",
+        api_key="sk",
+        model="gpt-image-2",
+        size="1024x1024",
+        prompt="p",
+        source_image_path=src,
+    )
+    with pytest.raises(svc.GenerationError) as ei:
+        svc.generate_one(req)
+    assert ei.value.retryable is False
+    assert "provider config error (503)" in str(ei.value)

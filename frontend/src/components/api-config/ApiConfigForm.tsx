@@ -326,7 +326,7 @@ export default function ApiConfigForm() {
           <Form.Item
             name="base_url"
             label="API 地址（base URL）"
-            tooltip="服务前缀；后端会自动拼接 /v1/models 与 /v1/images/generations"
+            tooltip="服务前缀；后端会自动拼接 /v1/models、/v1/images/edits 或 /v1/images/generations"
             rules={[
               { required: true, message: '请输入 API 地址' },
               { type: 'url', message: '请输入合法 URL' },

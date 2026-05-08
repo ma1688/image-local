@@ -29,6 +29,7 @@ dist/
 
 # ===== App data =====
 backend/data/outputs/
+backend/data/data/outputs/
 backend/data/thumbs/
 backend/data/uploads/
 backend/data/*.db

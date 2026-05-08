@@ -18,6 +18,7 @@ from app.models.job import Job, JobCandidate, JobItem
 from app.models.template import Template
 from app.schemas.job import JobCreate
 from app.services.event_bus import publish as publish_event
+from app.services.event_bus import reset_stream
 from app.services.prompt_template import validate_prompt
 from app.services.storage import InvalidPathError, safe_resolve
 
@@ -101,6 +102,13 @@ async def create_job(payload: JobCreate, session: AsyncSession) -> Job:
 
     await session.commit()
     await session.refresh(job)
+
+    # SQLite 开发库若被重建可能复用 job.id；先清掉 Redis 中同 id 的旧 stream，
+    # 再发布本次 job.created，避免 SSE 首次 history 回放旧终态事件。
+    try:
+        reset_stream(int(job.id))
+    except Exception:
+        pass  # 事件总线不可用时不阻断主流程
 
     # 提前发一个 job.created 事件，方便前端 SSE 订阅时立刻拿到上下文
     try:

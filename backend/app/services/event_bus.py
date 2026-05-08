@@ -47,6 +47,20 @@ def publish(job_id: int, payload: dict[str, Any], *, maxlen: int = 500) -> str:
         cli.close()
 
 
+def reset_stream(job_id: int) -> None:
+    """删除某个 job 的事件流。
+
+    SQLite 开发库可能被删除/重建后复用自增 id，而 Redis Stream 仍保留旧的
+    ``li:job:{id}:events``。新 job 创建前清掉同 id 旧流，避免前端首次订阅
+    ``history`` 时读到旧 job.terminated，造成 SSE 反复 close/reconnect。
+    """
+    cli = _sync_client()
+    try:
+        cli.delete(stream_key(job_id))
+    finally:
+        cli.close()
+
+
 async def read_stream(
     job_id: int,
     *,

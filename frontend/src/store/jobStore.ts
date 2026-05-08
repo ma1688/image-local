@@ -121,6 +121,12 @@ export const useJobStore = create<JobState>((set, get) => ({
     if (next !== cur) set({ currentDetail: next });
   },
   appendEvent: (e) => {
+    const eventJobId = 'job_id' in e.payload ? e.payload.job_id : null;
+    const activeJobId = get().currentJob?.id ?? null;
+    if (eventJobId != null && activeJobId != null && eventJobId !== activeJobId) {
+      return;
+    }
+
     const next = get().events.concat(e);
     if (next.length > MAX_LOG) {
       next.splice(0, next.length - MAX_LOG);

@@ -11,6 +11,7 @@ export default function Toolbar() {
   const templateCode = useWorkbenchStore((s) => s.templateCode);
   const outputDir = useConfigStore((s) => s.outputDir);
   const selectedProfileId = useConfigStore((s) => s.selectedProfileId);
+  const selectedModel = useConfigStore((s) => s.selectedModel);
 
   const templatesQuery = useQuery({
     queryKey: ['templates'],
@@ -23,8 +24,11 @@ export default function Toolbar() {
 
   const template = templatesQuery.data?.find((t) => t.code === templateCode);
   const profile = profilesQuery.data?.find((p) => p.id === selectedProfileId);
+  const imageEndpoint = selectedModel?.toLowerCase().startsWith('gpt-image')
+    ? '/v1/images/edits'
+    : '/v1/images/generations';
   const requestUrl = profile?.base_url
-    ? `${profile.base_url.replace(/\/$/, '')}/v1/images/generations`
+    ? `${profile.base_url.replace(/\/$/, '')}${imageEndpoint}`
     : '尚未选择 API 配置';
 
   return (
