@@ -368,6 +368,25 @@ button,
   justify-content: flex-end;
 }
 
+.api-config-duplicate-alert.ant-alert {
+  margin-top: 2px;
+  border-color: #fde68a;
+  border-radius: 10px;
+  background: #fffbeb;
+}
+
+.api-config-duplicate-alert .ant-alert-message {
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.api-config-duplicate-alert .ant-alert-description {
+  color: #a16207;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .log-popover {
   max-width: min(760px, calc(100vw - 32px));
 }

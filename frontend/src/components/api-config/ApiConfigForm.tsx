@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   App,
   Button,
   Card,
@@ -19,7 +20,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
-  ReloadOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@/api/client';
@@ -28,11 +28,8 @@ import type {
   ApiProfile,
   ApiProfileCreate,
   ApiProfileUpdate,
-  ModelInfo,
 } from '@/api/types';
 import { useConfigStore } from '@/store/configStore';
-
-const SIZE_OPTIONS = ['512x512', '768x768', '1024x1024', '1024x1536', '1536x1024', '2048x2048'];
 
 interface ApiConfigFormProps {
   embedded?: boolean;
@@ -45,6 +42,10 @@ interface ProfileFormValues {
   default_model?: string;
 }
 
+function normalizeBaseUrl(value: string) {
+  return value.trim().replace(/\/+$/, '').toLowerCase();
+}
+
 export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
@@ -53,38 +54,43 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
   const [createForm] = Form.useForm<ProfileFormValues>();
   const [editForm] = Form.useForm<ProfileFormValues>();
 
-  const { selectedProfileId, selectedModel, selectedSize } = useConfigStore();
+  const selectedProfileId = useConfigStore((s) => s.selectedProfileId);
   const setSelectedProfileId = useConfigStore((s) => s.setSelectedProfileId);
   const setSelectedModel = useConfigStore((s) => s.setSelectedModel);
-  const setSelectedSize = useConfigStore((s) => s.setSelectedSize);
 
   const profilesQuery = useQuery({
     queryKey: ['api-profiles'],
     queryFn: endpoints.apiProfiles.list,
   });
 
-  const [models, setModels] = useState<ModelInfo[]>([]);
-
-  // 当切换 profile，清掉模型列表（直到下次"获取模型"）
-  useEffect(() => {
-    setModels([]);
-  }, [selectedProfileId]);
-
   // 自动选首个 profile
   useEffect(() => {
     const list = profilesQuery.data;
     if (list && list.length > 0 && selectedProfileId == null) {
       setSelectedProfileId(list[0].id);
-      if (!selectedModel && list[0].default_model) {
-        setSelectedModel(list[0].default_model);
-      }
+      setSelectedModel(list[0].default_model ?? null);
     }
-  }, [profilesQuery.data, selectedProfileId, selectedModel, setSelectedProfileId, setSelectedModel]);
+  }, [profilesQuery.data, selectedProfileId, setSelectedProfileId, setSelectedModel]);
 
   const selectedProfile: ApiProfile | undefined = useMemo(
     () => profilesQuery.data?.find((p) => p.id === selectedProfileId),
     [profilesQuery.data, selectedProfileId],
   );
+
+  const duplicatedBaseUrlGroups = useMemo(() => {
+    const groups = new Map<string, ApiProfile[]>();
+    for (const profile of profilesQuery.data ?? []) {
+      const key = normalizeBaseUrl(profile.base_url);
+      groups.set(key, [...(groups.get(key) ?? []), profile]);
+    }
+    return Array.from(groups.values()).filter((group) => group.length > 1);
+  }, [profilesQuery.data]);
+
+  const handleProfileChange = (id: number) => {
+    setSelectedProfileId(id);
+    const profile = profilesQuery.data?.find((p) => p.id === id);
+    setSelectedModel(profile?.default_model ?? null);
+  };
 
   const createMutation = useMutation({
     mutationFn: (payload: ApiProfileCreate) => endpoints.apiProfiles.create(payload),
@@ -92,7 +98,7 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
       message.success(`已保存配置：${created.name}`);
       void queryClient.invalidateQueries({ queryKey: ['api-profiles'] });
       setSelectedProfileId(created.id);
-      if (created.default_model) setSelectedModel(created.default_model);
+      setSelectedModel(created.default_model ?? null);
       setCreateOpen(false);
       createForm.resetFields();
     },
@@ -106,7 +112,7 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
     onSuccess: () => {
       message.success('已删除');
       setSelectedProfileId(null);
-      setModels([]);
+      setSelectedModel(null);
       void queryClient.invalidateQueries({ queryKey: ['api-profiles'] });
     },
     onError: (err: unknown) => {
@@ -119,31 +125,15 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
       endpoints.apiProfiles.update(id, payload),
     onSuccess: (updated) => {
       message.success(`已更新配置：${updated.name}`);
+      if (updated.id === selectedProfileId) {
+        setSelectedModel(updated.default_model ?? null);
+      }
       setEditOpen(false);
       editForm.resetFields();
       void queryClient.invalidateQueries({ queryKey: ['api-profiles'] });
     },
     onError: (err: unknown) => {
       message.error(err instanceof ApiError ? err.detail : '更新失败');
-    },
-  });
-
-  const fetchModelsMutation = useMutation({
-    mutationFn: (id: number) => endpoints.apiProfiles.fetchModels(id),
-    onSuccess: (resp) => {
-      setModels(resp.models);
-      if (resp.models.length === 0) {
-        message.warning('外部接口返回 0 个模型');
-      } else {
-        message.success(`成功获取 ${resp.models.length} 个模型`);
-        if (!selectedModel || !resp.models.some((m) => m.id === selectedModel)) {
-          setSelectedModel(resp.models[0].id);
-        }
-      }
-    },
-    onError: (err: unknown) => {
-      const msg = err instanceof ApiError ? err.detail : '获取模型失败';
-      message.error(msg);
     },
   });
 
@@ -225,7 +215,7 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
               <Form.Item label="配置选择" tooltip="多套 API 之间切换">
                 <Select
                   value={selectedProfileId ?? undefined}
-                  onChange={(v) => setSelectedProfileId(v)}
+                  onChange={handleProfileChange}
                   placeholder="选择 API 配置"
                   options={(profilesQuery.data ?? []).map((p) => ({
                     value: p.id,
@@ -246,57 +236,18 @@ export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) 
                 <Input value={selectedProfile?.api_key_masked ?? ''} readOnly />
               </Form.Item>
             </Col>
-            <Col xs={24} md={embedded ? 24 : 12} xl={embedded ? 24 : 12}>
-              <Form.Item label="模型">
-                <Space.Compact style={{ width: '100%' }}>
-                  <Select
-                    value={selectedModel ?? undefined}
-                    onChange={(v) => setSelectedModel(v)}
-                    placeholder={
-                      models.length === 0 ? '点击右侧“获取模型”' : '选择模型'
-                    }
-                    options={
-                      models.length > 0
-                        ? models.map((m) => ({ value: m.id, label: m.id }))
-                        : selectedProfile?.default_model
-                          ? [
-                              {
-                                value: selectedProfile.default_model,
-                                label: selectedProfile.default_model,
-                              },
-                            ]
-                          : []
-                    }
-                    style={{ flex: 1 }}
-                  />
-                  <Tooltip title="调用 /v1/models 拉取真实可用模型列表">
-                    <Button
-                      icon={<ReloadOutlined />}
-                      loading={fetchModelsMutation.isPending}
-                      disabled={!selectedProfileId}
-                      onClick={() => {
-                        if (selectedProfileId)
-                          fetchModelsMutation.mutate(selectedProfileId);
-                      }}
-                    >
-                      获取模型
-                    </Button>
-                  </Tooltip>
-                </Space.Compact>
-              </Form.Item>
-            </Col>
           </Row>
-          <Row gutter={16}>
-            <Col xs={24}>
-              <Form.Item label="图片尺寸" style={{ marginBottom: 0 }}>
-                <Select
-                  value={selectedSize}
-                  onChange={setSelectedSize}
-                  options={SIZE_OPTIONS.map((s) => ({ value: s, label: s }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
+          {duplicatedBaseUrlGroups.length > 0 && (
+            <Alert
+              className="api-config-duplicate-alert"
+              type="warning"
+              showIcon
+              message="检测到相同 API 地址的多个配置"
+              description={duplicatedBaseUrlGroups
+                .map((group) => `${group[0].base_url}：${group.map((p) => p.name).join('、')}`)
+                .join('；')}
+            />
+          )}
         </Form>
       )}
 

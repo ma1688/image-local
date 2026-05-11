@@ -43,8 +43,6 @@ export default function StatsHeader() {
   const currentJob = useJobStore((s) => s.currentJob);
   const events = useJobStore((s) => s.events);
   const selectedProfileId = useConfigStore((s) => s.selectedProfileId);
-  const selectedModel = useConfigStore((s) => s.selectedModel);
-  const selectedSize = useConfigStore((s) => s.selectedSize);
   const profilesQuery = useQuery({
     queryKey: ['api-profiles'],
     queryFn: endpoints.apiProfiles.list,
@@ -59,6 +57,11 @@ export default function StatsHeader() {
     : 0;
   const overallPct = totalCandidates > 0 ? Math.round((finished / totalCandidates) * 100) : 0;
   const selectedProfile = profilesQuery.data?.find((p) => p.id === selectedProfileId);
+  const duplicatedBaseUrlCount = new Set(
+    (profilesQuery.data ?? []).map((p) => p.base_url.trim().replace(/\/+$/, '').toLowerCase()),
+  ).size;
+  const hasDuplicatedBaseUrls =
+    !!profilesQuery.data && duplicatedBaseUrlCount < profilesQuery.data.length;
 
   return (
     <div className="stats-header">
@@ -131,7 +134,7 @@ export default function StatsHeader() {
                 {selectedProfile?.name ?? '点击配置'}
               </div>
               <div className="stats-card__meta">
-                {selectedModel ?? selectedProfile?.default_model ?? '未选模型'} · {selectedSize}
+                {hasDuplicatedBaseUrls ? '有重复地址，请检查' : selectedProfile?.base_url ?? '新建 / 切换 API'}
               </div>
             </div>
           </div>
