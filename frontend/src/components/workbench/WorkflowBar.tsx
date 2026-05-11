@@ -264,7 +264,7 @@ export default function WorkflowBar({ onPickImages }: WorkflowBarProps) {
 
       <RightOutlined className="workflow-arrow" />
 
-      <ApiConfigForm variant="workflow" />
+      <ApiConfigForm embedded />
 
       <div className="workflow-start">
         <Space.Compact>

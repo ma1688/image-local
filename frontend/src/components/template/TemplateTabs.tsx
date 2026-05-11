@@ -1,12 +1,12 @@
 import { useEffect, useMemo } from 'react';
-import { Card, Empty, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { Card, Empty, Radio, Space, Spin, Typography } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '@/api/endpoints';
 import type { Template } from '@/api/types';
 import { useWorkbenchStore } from '@/store/workbenchStore';
 
-const { Text, Paragraph } = Typography;
+const { Paragraph } = Typography;
 
 export default function TemplateTabs() {
   const { templateCode, setTemplateCode } = useWorkbenchStore();
@@ -28,7 +28,7 @@ export default function TemplateTabs() {
   return (
     <Card
       size="small"
-      className="workbench-card"
+      className="workbench-card template-card"
       title={
         <Space>
           <AppstoreOutlined />
@@ -42,45 +42,42 @@ export default function TemplateTabs() {
       )}
       {list.length > 0 && (
         <>
-          <Tabs
-            activeKey={templateCode}
-            onChange={setTemplateCode}
-            size="small"
-            items={list.map((t) => ({
-              key: t.code,
-              label: (
-                <Space size={4}>
-                  {t.name}
-                  {t.builtin && (
-                    <Tag color="gold" style={{ marginInlineEnd: 0 }}>
-                      内置
-                    </Tag>
-                  )}
-                </Space>
-              ),
-            }))}
-          />
+          <Radio.Group
+            className="template-picker"
+            value={templateCode}
+            onChange={(e) => setTemplateCode(e.target.value)}
+          >
+            {list.map((t) => (
+              <Radio.Button key={t.code} value={t.code} className="template-picker__item">
+                <span className="template-picker__name">{t.name}</span>
+                {t.builtin && <span className="template-picker__badge">内置</span>}
+              </Radio.Button>
+            ))}
+          </Radio.Group>
           {active && (
-            <Space direction="vertical" size={4} style={{ width: '100%' }}>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                code: <code>{active.code}</code>
+            <Space className="template-detail" direction="vertical" size={8}>
+              <div className="template-meta-grid">
+                <div className="template-meta-chip">
+                  <span>code</span>
+                  <code>{active.code}</code>
+                </div>
                 {active.default_size && (
-                  <>
-                    {' · '}默认尺寸: <code>{active.default_size}</code>
-                  </>
+                  <div className="template-meta-chip">
+                    <span>默认尺寸</span>
+                    <code>{active.default_size}</code>
+                  </div>
                 )}
                 {active.default_model && (
-                  <>
-                    {' · '}默认模型: <code>{active.default_model}</code>
-                  </>
+                  <div className="template-meta-chip">
+                    <span>默认模型</span>
+                    <code>{active.default_model}</code>
+                  </div>
                 )}
-              </Text>
+              </div>
               <Paragraph
                 className="template-preview"
                 style={{
                   marginBottom: 0,
-                  fontSize: 12,
-                  padding: '8px 10px',
                   whiteSpace: 'pre-wrap',
                 }}
               >

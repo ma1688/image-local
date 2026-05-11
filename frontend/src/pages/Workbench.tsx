@@ -3,7 +3,6 @@ import { Badge, Layout, Space, Tag, Typography } from 'antd';
 import { PictureOutlined } from '@ant-design/icons';
 import { endpoints } from '@/api/endpoints';
 import type { HealthResponse } from '@/api/types';
-import ApiConfigForm from '@/components/api-config/ApiConfigForm';
 import GenerationControl from '@/components/generation/GenerationControl';
 import ImageSource from '@/components/image-source/ImageSource';
 import HistoryPanel from '@/components/history/HistoryPanel';
@@ -81,7 +80,6 @@ export default function Workbench() {
               <TemplateTabs />
             </div>
             <div className="config-bottom-grid">
-              <ApiConfigForm />
               <GenerationControl />
             </div>
           </main>

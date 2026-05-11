@@ -1,9 +1,14 @@
-import { Card, Progress, Typography } from 'antd';
+import { Card, Popover, Progress, Typography } from 'antd';
 import {
   AppstoreAddOutlined,
   CheckCircleOutlined,
+  SettingOutlined,
   HomeFilled,
 } from '@ant-design/icons';
+import { useQuery } from '@tanstack/react-query';
+import { endpoints } from '@/api/endpoints';
+import ApiConfigForm from '@/components/api-config/ApiConfigForm';
+import { useConfigStore } from '@/store/configStore';
 import { useImageSourceStore } from '@/store/imageSourceStore';
 import { useJobStore } from '@/store/jobStore';
 
@@ -34,6 +39,13 @@ export default function StatsHeader() {
   const items = useImageSourceStore((s) => s.items);
   const selected = useImageSourceStore((s) => s.selected);
   const currentJob = useJobStore((s) => s.currentJob);
+  const selectedProfileId = useConfigStore((s) => s.selectedProfileId);
+  const selectedModel = useConfigStore((s) => s.selectedModel);
+  const selectedSize = useConfigStore((s) => s.selectedSize);
+  const profilesQuery = useQuery({
+    queryKey: ['api-profiles'],
+    queryFn: endpoints.apiProfiles.list,
+  });
 
   const pending = items.filter((i) => i.valid).length;
   const selectedCount = selected.size;
@@ -43,6 +55,7 @@ export default function StatsHeader() {
     ? currentJob.succeeded_count + currentJob.failed_count
     : 0;
   const overallPct = totalCandidates > 0 ? Math.round((finished / totalCandidates) * 100) : 0;
+  const selectedProfile = profilesQuery.data?.find((p) => p.id === selectedProfileId);
 
   return (
     <div className="stats-header">
@@ -84,6 +97,43 @@ export default function StatsHeader() {
           status={overallPct === 100 ? 'success' : 'normal'}
         />
       </Card>
+      <Popover
+        trigger="click"
+        placement="bottomRight"
+        arrow={false}
+        destroyOnHidden
+        overlayClassName="api-config-popover"
+        content={<ApiConfigForm embedded />}
+      >
+        <Card
+          size="small"
+          className="workbench-card stats-card stats-card--config"
+          role="button"
+          tabIndex={0}
+          aria-label="打开 API 配置"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.currentTarget.click();
+            }
+          }}
+        >
+          <div className="stats-card__body">
+            <div className="stats-card__icon">
+              <SettingOutlined />
+            </div>
+            <div className="stats-card__content">
+              <Text className="stats-card__label">API 配置</Text>
+              <div className="stats-card__value stats-card__value--small">
+                {selectedProfile?.name ?? '点击配置'}
+              </div>
+              <div className="stats-card__meta">
+                {selectedModel ?? selectedProfile?.default_model ?? '未选模型'} · {selectedSize}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Popover>
     </div>
   );
 }

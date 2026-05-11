@@ -34,6 +34,10 @@ import { useConfigStore } from '@/store/configStore';
 
 const SIZE_OPTIONS = ['512x512', '768x768', '1024x1024', '1024x1536', '1536x1024', '2048x2048'];
 
+interface ApiConfigFormProps {
+  embedded?: boolean;
+}
+
 interface ProfileFormValues {
   name: string;
   base_url: string;
@@ -41,7 +45,7 @@ interface ProfileFormValues {
   default_model?: string;
 }
 
-export default function ApiConfigForm() {
+export default function ApiConfigForm({ embedded = false }: ApiConfigFormProps) {
   const { message } = App.useApp();
   const queryClient = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -144,11 +148,14 @@ export default function ApiConfigForm() {
   });
 
   const baseUrl = selectedProfile?.base_url ?? '';
+  const cardClassName = embedded
+    ? 'workbench-card api-config-card api-config-card--embedded'
+    : 'workbench-card api-config-card';
 
   return (
     <Card
       size="small"
-      className="workbench-card"
+      className={cardClassName}
       title={
         <Space>
           <span>API 配置</span>
@@ -214,7 +221,7 @@ export default function ApiConfigForm() {
       ) : (
         <Form layout="vertical" size="middle">
           <Row gutter={16}>
-            <Col xs={24} xl={12}>
+            <Col xs={24} md={embedded ? 24 : 12} xl={embedded ? 24 : 12}>
               <Form.Item label="配置选择" tooltip="多套 API 之间切换">
                 <Select
                   value={selectedProfileId ?? undefined}
@@ -227,19 +234,19 @@ export default function ApiConfigForm() {
                 />
               </Form.Item>
             </Col>
-            <Col xs={24} xl={12}>
+            <Col xs={24} md={embedded ? 24 : 12} xl={embedded ? 24 : 12}>
               <Form.Item label="API 地址">
                 <Input value={baseUrl} readOnly placeholder="选择配置后显示" />
               </Form.Item>
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col xs={24} xl={12}>
+            <Col xs={24} md={embedded ? 24 : 12} xl={embedded ? 24 : 12}>
               <Form.Item label="API Key（已加密存储，仅展示掩码）">
                 <Input value={selectedProfile?.api_key_masked ?? ''} readOnly />
               </Form.Item>
             </Col>
-            <Col xs={24} xl={12}>
+            <Col xs={24} md={embedded ? 24 : 12} xl={embedded ? 24 : 12}>
               <Form.Item label="模型">
                 <Space.Compact style={{ width: '100%' }}>
                   <Select
