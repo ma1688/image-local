@@ -130,7 +130,7 @@ button,
   display: grid;
   min-width: 0;
   grid-area: stats;
-  grid-template-columns: minmax(170px, 0.85fr) minmax(220px, 1fr) minmax(165px, 0.82fr) minmax(270px, 1.28fr) minmax(230px, 1.02fr);
+  grid-template-columns: minmax(160px, 0.8fr) minmax(210px, 0.98fr) minmax(160px, 0.78fr) minmax(250px, 1.18fr) minmax(220px, 1fr) minmax(210px, 0.96fr);
   gap: var(--wb-gap);
   align-items: stretch;
 }
@@ -241,6 +241,17 @@ button,
 .stats-card--config .stats-card__icon {
   color: var(--wb-primary);
   background: #eff6ff;
+}
+
+.stats-card--log.ant-card {
+  border-color: rgba(16, 185, 129, 0.22);
+  background:
+    linear-gradient(135deg, rgba(240, 253, 250, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.stats-card--log .stats-card__icon {
+  color: var(--wb-accent);
+  background: #ecfdf5;
 }
 
 .stats-card__content {
@@ -355,6 +366,38 @@ button,
 .api-config-card--embedded .ant-card-extra .ant-space {
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.log-popover {
+  max-width: min(760px, calc(100vw - 32px));
+}
+
+.log-popover .ant-popover-inner {
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
+}
+
+.log-popover .ant-popover-inner-content {
+  padding: 0;
+}
+
+.log-card--embedded {
+  width: min(740px, calc(100vw - 32px));
+  background: #fff;
+}
+
+.log-card__embedded-head {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px 8px 12px;
+  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #fff, #f8fafc);
 }
 
 .workbench-toolbar {
@@ -1572,7 +1615,7 @@ button,
   }
 
   .stats-header {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .workbench-main-grid {

@@ -2,12 +2,14 @@ import { Card, Popover, Progress, Typography } from 'antd';
 import {
   AppstoreAddOutlined,
   CheckCircleOutlined,
+  FileTextOutlined,
   SettingOutlined,
   HomeFilled,
 } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '@/api/endpoints';
 import ApiConfigForm from '@/components/api-config/ApiConfigForm';
+import LogStream from '@/components/log/LogStream';
 import { useConfigStore } from '@/store/configStore';
 import { useImageSourceStore } from '@/store/imageSourceStore';
 import { useJobStore } from '@/store/jobStore';
@@ -39,6 +41,7 @@ export default function StatsHeader() {
   const items = useImageSourceStore((s) => s.items);
   const selected = useImageSourceStore((s) => s.selected);
   const currentJob = useJobStore((s) => s.currentJob);
+  const events = useJobStore((s) => s.events);
   const selectedProfileId = useConfigStore((s) => s.selectedProfileId);
   const selectedModel = useConfigStore((s) => s.selectedModel);
   const selectedSize = useConfigStore((s) => s.selectedSize);
@@ -129,6 +132,43 @@ export default function StatsHeader() {
               </div>
               <div className="stats-card__meta">
                 {selectedModel ?? selectedProfile?.default_model ?? '未选模型'} · {selectedSize}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Popover>
+      <Popover
+        trigger="click"
+        placement="bottomRight"
+        arrow={false}
+        destroyOnHidden={false}
+        overlayClassName="log-popover"
+        content={<LogStream embedded />}
+      >
+        <Card
+          size="small"
+          className="workbench-card stats-card stats-card--log"
+          role="button"
+          tabIndex={0}
+          aria-label="打开运行日志"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.currentTarget.click();
+            }
+          }}
+        >
+          <div className="stats-card__body">
+            <div className="stats-card__icon">
+              <FileTextOutlined />
+            </div>
+            <div className="stats-card__content">
+              <Text className="stats-card__label">运行日志</Text>
+              <div className="stats-card__value stats-card__value--small">
+                {events.length > 0 ? `${events.length} 条` : '下拉查看'}
+              </div>
+              <div className="stats-card__meta">
+                {currentJob ? `Job #${currentJob.id} · ${currentJob.status}` : '尚未提交任务'}
               </div>
             </div>
           </div>

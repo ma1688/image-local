@@ -45,7 +45,11 @@ function formatLine(p: SseEvent): string {
   }
 }
 
-export default function LogStream() {
+interface LogStreamProps {
+  embedded?: boolean;
+}
+
+export default function LogStream({ embedded = false }: LogStreamProps) {
   const currentJob = useJobStore((s) => s.currentJob);
   const events = useJobStore((s) => s.events);
   const appendEvent = useJobStore((s) => s.appendEvent);
@@ -96,39 +100,11 @@ export default function LogStream() {
     return `Job #${currentJob.id}`;
   }, [currentJob]);
 
-  return (
-    <Card
-      size="small"
-      className="workbench-card log-card"
-      title={
-        <Space>
-          <span>运行日志</span>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {subtitle}
-          </Text>
-          {status && <Tag color={status === 'running' ? 'processing' : 'default'}>{status}</Tag>}
-          {currentJob && sseState !== 'open' && sseState !== 'closed' && (
-            <Tooltip title="网络抖动或后端重启时会自动重连，并按 Last-Event-ID 续推未消费事件">
-              <Tag color="orange" style={{ marginInlineEnd: 0 }}>
-                {sseState === 'connecting' ? '连接中…' : '重连中…'}
-              </Tag>
-            </Tooltip>
-          )}
-        </Space>
-      }
-      extra={
-        <Tooltip title="清空当前日志">
-          <Button size="small" icon={<ClearOutlined />} onClick={resetEvents}>
-            清空日志
-          </Button>
-        </Tooltip>
-      }
-      styles={{ body: { padding: 0 } }}
-    >
+  const logBody = (
       <div
         ref={containerRef}
         style={{
-          height: 'clamp(420px, calc(100vh - 280px), 760px)',
+          height: embedded ? 360 : 'clamp(420px, calc(100vh - 280px), 760px)',
           overflowY: 'auto',
           padding: '8px 12px',
           background: '#0b1220',
@@ -182,6 +158,63 @@ export default function LogStream() {
           })
         )}
       </div>
+  );
+
+  if (embedded) {
+    return (
+      <div className="log-card log-card--embedded">
+        <div className="log-card__embedded-head">
+          <Space size={8} wrap>
+            <strong>运行日志</strong>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {subtitle}
+            </Text>
+            {status && <Tag color={status === 'running' ? 'processing' : 'default'}>{status}</Tag>}
+            {currentJob && sseState !== 'open' && sseState !== 'closed' && (
+              <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                {sseState === 'connecting' ? '连接中…' : '重连中…'}
+              </Tag>
+            )}
+          </Space>
+          <Button size="small" icon={<ClearOutlined />} onClick={resetEvents}>
+            清空
+          </Button>
+        </div>
+        {logBody}
+      </div>
+    );
+  }
+
+  return (
+    <Card
+      size="small"
+      className="workbench-card log-card"
+      title={
+        <Space>
+          <span>运行日志</span>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {subtitle}
+          </Text>
+          {status && <Tag color={status === 'running' ? 'processing' : 'default'}>{status}</Tag>}
+          {currentJob && sseState !== 'open' && sseState !== 'closed' && (
+            <Tooltip title="网络抖动或后端重启时会自动重连，并按 Last-Event-ID 续推未消费事件">
+              <Tag color="orange" style={{ marginInlineEnd: 0 }}>
+                {sseState === 'connecting' ? '连接中…' : '重连中…'}
+              </Tag>
+            </Tooltip>
+          )}
+        </Space>
+      }
+      extra={
+        <Tooltip title="清空当前日志">
+          <Button size="small" icon={<ClearOutlined />} onClick={resetEvents}>
+            清空日志
+          </Button>
+        </Tooltip>
+      }
+      styles={{ body: { padding: 0 } }}
+    >
+      {logBody}
     </Card>
   );
 }

@@ -4,7 +4,6 @@ import { PictureOutlined } from '@ant-design/icons';
 import { endpoints } from '@/api/endpoints';
 import type { HealthResponse } from '@/api/types';
 import HistoryPanel from '@/components/history/HistoryPanel';
-import LogStream from '@/components/log/LogStream';
 import ResultsList from '@/components/results/ResultsList';
 import StatsHeader from '@/components/workbench/StatsHeader';
 import StorageBanner from '@/components/workbench/StorageBanner';
@@ -66,12 +65,6 @@ export default function Workbench() {
         <Toolbar />
         <StorageBanner />
         <WorkflowBar />
-
-        <div className="workbench-main-grid workbench-main-grid--single">
-          <section className="workbench-panel workbench-panel--feedback">
-            <LogStream />
-          </section>
-        </div>
 
         <div className="workbench-results-grid">
           <ResultsList />
