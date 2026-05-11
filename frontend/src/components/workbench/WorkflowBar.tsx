@@ -332,48 +332,22 @@ export default function WorkflowBar() {
 
   const advancedContent = (
     <div className="workflow-popover workflow-popover--model" onClick={stopPopoverClick}>
-      <div className="workflow-popover__title">高级设置</div>
+      <div className="workflow-popover__title">重试 / 输出</div>
       <Space direction="vertical" size={10} style={{ width: '100%' }}>
-        <div>
-          <Text type="secondary" className="workflow-field-label">API 配置</Text>
-          <Select
-            value={selectedProfileId ?? undefined}
-            onChange={(v) => setSelectedProfileId(v)}
-            placeholder="选择 API 配置"
-            options={(profilesQuery.data ?? []).map((p) => ({
-              value: p.id,
-              label: `${p.name} (${p.base_url})`,
-            }))}
-            style={{ width: '100%' }}
-          />
-        </div>
-        <div className="workflow-settings-grid">
-          <div>
-            <Text type="secondary" className="workflow-field-label">每张生成</Text>
-            <InputNumber
-              min={1}
-              max={6}
-              value={candidatesPerImage}
-              disabled={!!isRunning}
-              onChange={(v) => setCandidatesPerImage(v ?? 1)}
-              style={{ width: '100%' }}
-            />
-          </div>
-          <div>
-            <Text type="secondary" className="workflow-field-label">重试次数</Text>
-            <InputNumber
-              min={1}
-              max={5}
-              value={retryMax}
-              disabled={!autoRetry || !!isRunning}
-              onChange={(v) => setRetryMax(v ?? 1)}
-              style={{ width: '100%' }}
-            />
-          </div>
-        </div>
         <div className="workflow-switch-row">
           <Text type="secondary">失败后自动重新生成</Text>
           <Switch checked={autoRetry} disabled={!!isRunning} onChange={setAutoRetry} />
+        </div>
+        <div>
+          <Text type="secondary" className="workflow-field-label">失败重试次数</Text>
+          <InputNumber
+            min={1}
+            max={5}
+            value={retryMax}
+            disabled={!autoRetry || !!isRunning}
+            onChange={(v) => setRetryMax(v ?? 1)}
+            style={{ width: '100%' }}
+          />
         </div>
         <div>
           <Text type="secondary" className="workflow-field-label">输出目录</Text>
@@ -479,7 +453,7 @@ export default function WorkflowBar() {
             <Popover trigger="click" placement="topLeft" content={advancedContent}>
               <button type="button" className="workflow-chip workflow-chip--settings">
                 <SlidersOutlined />
-                <span>高级设置</span>
+                <span>重试 / 输出</span>
               </button>
             </Popover>
           </div>
