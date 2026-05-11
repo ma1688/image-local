@@ -3,6 +3,7 @@ import {
   App,
   Button,
   Card,
+  Popover,
   Radio,
   Space,
   Spin,
@@ -37,6 +38,35 @@ function thumbUrl(absPath: string): string {
   return `/api/files?path=${encodeURIComponent(absPath)}`;
 }
 
+interface HoverPreviewImageProps {
+  src: string;
+  alt: string;
+}
+
+function HoverPreviewImage({ src, alt }: HoverPreviewImageProps) {
+  return (
+    <Popover
+      overlayClassName="image-hover-preview-popover"
+      placement="top"
+      mouseEnterDelay={0.12}
+      trigger={['hover', 'focus']}
+      content={
+        <div className="image-hover-preview">
+          <img src={src} alt={`${alt} 预览`} />
+        </div>
+      }
+    >
+      <button
+        type="button"
+        className="image-hover-preview-trigger"
+        aria-label={`悬浮或聚焦查看 ${alt} 大图`}
+      >
+        <img src={src} alt={alt} />
+      </button>
+    </Popover>
+  );
+}
+
 interface CandidateCardProps {
   candidate: JobCandidateRead;
   jobId: number;
@@ -56,7 +86,10 @@ function CandidateCard({ candidate, onSelect, pending }: CandidateCardProps) {
     <div className="result-candidate">
       <div className={thumbClass}>
         {candidate.status === 'succeeded' && candidate.output_path ? (
-          <img src={thumbUrl(candidate.output_path)} alt={`候选 ${candidate.index}`} />
+          <HoverPreviewImage
+            src={thumbUrl(candidate.output_path)}
+            alt={`候选 ${candidate.index}`}
+          />
         ) : candidate.status === 'failed' ? (
           <Tooltip title={candidate.last_error ?? ''}>
             <CloseCircleOutlined className="result-candidate__failed-icon" />
